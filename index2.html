@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Docs Workspace Engine - AI Canvas Tab</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Inter Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Fira Code', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f8fafc',
+              100: '#f1f5f9',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom premium scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .dark ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.3);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .dark ::-webkit-scrollbar-thumb {
+      background: #334155;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Target extracted document styled lists */
+    .doc-content p {
+      margin-bottom: 0.75rem;
+      line-height: 1.625;
+    }
+    .doc-content ul {
+      list-style-type: disc;
+      padding-left: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .doc-content ol {
+      list-style-type: decimal;
+      padding-left: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .doc-content li {
+      margin-bottom: 0.5rem;
+      line-height: 1.5;
+    }
+    .doc-content h1, .doc-content h2, .doc-content h3 {
+      font-weight: 700;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-200 min-h-screen transition-colors duration-200 font-sans flex flex-col overflow-hidden">
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="flex flex-col h-screen overflow-hidden">
+    
+    <!-- MINIMAL HEADER NAVBAR -->
+    <header class="bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 shadow-sm z-10">
+      
+      <!-- Minimal Doc URL panel -->
+      <div class="flex flex-wrap items-center gap-2 max-w-xl w-full md:w-auto">
+        <div class="relative flex-grow">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-link text-[10px]"></i>
+          </span>
+          <input type="text" id="doc-url" class="w-full pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-zinc-800 border border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-zinc-900 text-xs rounded-lg outline-none transition-all font-mono" placeholder="Published Google Doc URL..." value="https://docs.google.com/document/d/e/2PACX-1vT8kYpER1iCAVbZ-ZO45Nn5-rrPGQ63DGO1a0dVQHbpS0VLFXz6t9mjvT2XVmrWewu8eMGe0nK0casH/pub">
+        </div>
+        <button id="btn-fetch" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5 shrink-0">
+          <i class="fa-solid fa-sync text-xs" id="fetch-icon"></i> Fetch
+        </button>
+      </div>
+
+      <!-- Quick Utility Actions (Includes Toggle Layout Button) -->
+      <div class="flex items-center gap-1.5">
+        <button id="style-toggle" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-zinc-800 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-file-lines"></i> <span id="toggle-text">Layout: App View</span>
+        </button>
+        <button id="btn-toggle-manual" class="text-xs font-semibold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 px-2.5 py-1.5 rounded-lg transition-all" title="Manual Source Input">
+          <i class="fa-solid fa-code"></i> Paste HTML
+        </button>
+        <button id="btn-toggle-theme" class="p-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors" title="Toggle Dark/Light Mode">
+          <i class="fa-solid fa-moon text-md dark:hidden"></i>
+          <i class="fa-solid fa-sun text-md hidden dark:block text-yellow-400"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- MAIN SIMPLIFIED WORKSPACE LAYOUT -->
+    <main class="flex-grow flex flex-col md:flex-row overflow-hidden">
+      
+      <!-- LEFT WORKSPACE BUTTONS SIDEBAR -->
+      <aside class="w-full md:w-80 border-r border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col shrink-0 overflow-hidden">
+        
+        <!-- Sidebar Title and Segment Counter -->
+        <div class="p-4 border-b border-slate-100 dark:border-zinc-800 flex flex-col gap-2 shrink-0 bg-slate-50/50 dark:bg-zinc-900/50">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">AI Canvas TOC Workspaces</span>
+            <span id="badge-task-count" class="bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-semibold px-2 py-0.5 rounded-full">0</span>
+          </div>
+          
+          <!-- Quick Filter Input -->
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <i class="fa-solid fa-magnifying-glass text-[10px]"></i>
+            </span>
+            <input type="text" id="task-search" class="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-zinc-800 text-xs border border-slate-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:border-indigo-500 transition-all" placeholder="Quick find workspace...">
+          </div>
+        </div>
+
+        <!-- Scrollable Button Container for Workspaces -->
+        <div id="task-list" class="flex-grow overflow-y-auto p-3 space-y-1.5">
+          <div class="flex flex-col items-center justify-center h-48 text-center text-slate-400 p-4">
+            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-indigo-500"></i>
+            <p class="text-xs font-medium">Auto-fetching document...</p>
+            <p class="text-[10px] mt-1 text-slate-400">Slicing nodes from the AI Canvas TOC</p>
+          </div>
+        </div>
+
+        <!-- Connection status bar -->
+        <div class="p-3 bg-slate-50 dark:bg-zinc-800/20 border-t border-slate-100 dark:border-zinc-800 shrink-0 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-zinc-400">
+          <div class="flex items-center gap-1.5">
+            <span class="inline-block w-2 h-2 rounded-full bg-slate-300 dark:bg-zinc-700 animate-pulse" id="status-dot"></span>
+            <span id="status-text" class="text-[10px] font-semibold tracking-wide uppercase">Connecting...</span>
+          </div>
+          <button id="btn-open-source" class="text-[10px] text-indigo-500 hover:underline flex items-center gap-1" target="_blank">
+            Doc Link <i class="fa-solid fa-up-right-from-square text-[8px]"></i>
+          </button>
+        </div>
+      </aside>
+
+      <!-- CENTRAL MAIN CONTENT AREA -->
+      <section class="flex-grow flex flex-col bg-slate-50 dark:bg-zinc-950 overflow-hidden relative">
+
+        <!-- SCROLLABLE TEXT BLOCK FOR ACTIVE WORKSPACE LIST -->
+        <div class="flex-grow overflow-y-auto p-6 md:p-8">
+          <div class="max-w-3xl mx-auto">
+            
+            <!-- Welcome state -->
+            <div id="workspace-empty-state" class="bg-white dark:bg-zinc-900 rounded-xl p-8 border border-slate-200 dark:border-zinc-800/80 text-center shadow-xs mt-8">
+              <div class="w-12 h-12 bg-indigo-50 dark:bg-zinc-800 text-indigo-500 dark:text-indigo-400 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-hourglass-half text-xl animate-pulse"></i>
+              </div>
+              <h3 class="text-base font-bold text-slate-800 dark:text-white">Connecting your Google Doc</h3>
+              <p class="text-xs text-slate-500 dark:text-zinc-400 mt-1 leading-relaxed max-w-md mx-auto">
+                Scanning the Document specifically for lists designated with the <code class="bg-slate-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-indigo-600 font-mono font-bold">&lt;&lt;</code> prefix under the <strong class="text-indigo-600 dark:text-indigo-400">AI Canvas TOC</strong> header.
+              </p>
+            </div>
+
+            <!-- Active Workspace Container -->
+            <div id="workspace-active-view" class="hidden space-y-6">
+              
+              <!-- Dynamic Layout Content Wrapper -->
+              <div id="dynamic-layout-container"></div>
+
+              <!-- Simple Next / Previous buttons -->
+              <div class="flex items-center justify-between px-2 pt-2">
+                <button id="btn-prev-workspace" class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors flex items-center gap-1">
+                  <i class="fa-solid fa-arrow-left text-[10px]"></i> Previous Task
+                </button>
+                <button id="btn-next-workspace" class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors flex items-center gap-1">
+                  Next Task <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- COLLAPSED MANUAL PASTE OVERLAY MODAL -->
+  <div id="manual-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white dark:bg-zinc-900 rounded-xl max-w-2xl w-full p-5 border border-slate-200 dark:border-zinc-800 shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100 dark:border-zinc-800">
+        <h3 class="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
+          <i class="fa-solid fa-code text-indigo-600"></i> Manual Google Doc Source Input
+        </h3>
+        <button id="btn-close-manual" class="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 p-1">
+          <i class="fa-solid fa-times text-md"></i>
+        </button>
+      </div>
+
+      <div class="text-[11px] text-slate-500 dark:text-zinc-400 mb-3 space-y-1">
+        <p class="font-bold text-slate-700 dark:text-zinc-300">💡 Manual Copy Option:</p>
+        <p>If direct fetch fails due to sandbox CORS restrictions, copy your published Google Doc webpage source code (<kbd class="px-1 bg-slate-100 dark:bg-zinc-800 rounded">Ctrl+U</kbd>) and paste it below.</p>
+      </div>
+
+      <div class="flex-grow flex flex-col gap-3 min-h-[250px] overflow-hidden mb-4">
+        <textarea id="manual-html-input" class="flex-grow w-full p-3 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-[11px] font-mono outline-none focus:border-indigo-500 resize-none" placeholder="Paste full raw HTML of published Google Doc here..."></textarea>
+        
+        <!-- Live Debug Log Terminal -->
+        <div id="debug-log-console" class="h-28 bg-zinc-950 text-emerald-400 p-3 rounded-lg text-[10px] font-mono overflow-y-auto space-y-1">
+          <span class="text-zinc-500">// Debugging System Console Log ready.</span>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button id="btn-close-manual-action" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800 rounded-lg font-medium">Cancel</button>
+        <button id="btn-parse-manual" class="px-4 py-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold shadow-sm">Parse Source Code</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC ENGINE -->
+  <script>
+    const state = {
+      rawHtml: '',
+      docStyles: '',
+      tasks: [],
+      selectedTaskId: null,
+      stylingPreference: 'app', // App View is now default
+      darkMode: localStorage.getItem('theme') === 'dark',
+    };
+
+    function log(message, type = 'info') {
+      const consoleLogs = document.getElementById('debug-log-console');
+      if (!consoleLogs) return;
+      
+      const timeStr = new Date().toLocaleTimeString();
+      let colorClass = 'text-slate-400';
+      if (type === 'success') colorClass = 'text-emerald-400 font-bold';
+      if (type === 'error') colorClass = 'text-rose-400 font-bold';
+      if (type === 'warn') colorClass = 'text-amber-400 font-semibold';
+      
+      const logLine = document.createElement('div');
+      logLine.className = `text-[10px] leading-relaxed py-0.5 border-b border-zinc-900/50 ${colorClass}`;
+      logLine.innerHTML = `<span class="text-zinc-500 font-mono">[${timeStr}]</span> ${message}`;
+      consoleLogs.appendChild(logLine);
+      consoleLogs.scrollTop = consoleLogs.scrollHeight;
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      toast.className = `p-3 rounded-lg shadow-md text-xs font-semibold text-white pointer-events-auto transition-all transform translate-y-2 opacity-0 duration-300 flex items-center gap-2`;
+      
+      let bg = 'bg-slate-800';
+      let icon = 'fa-info-circle';
+      if (type === 'success') { bg = 'bg-emerald-600'; icon = 'fa-circle-check'; }
+      if (type === 'error') { bg = 'bg-rose-600'; icon = 'fa-circle-exclamation'; }
+      if (type === 'warn') { bg = 'bg-amber-600'; icon = 'fa-triangle-exclamation'; }
+      
+      toast.className += ` ${bg}`;
+      toast.innerHTML = `<i class="fa-solid ${icon} text-sm"></i> <span>${message}</span>`;
+      
+      container.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.classList.remove('opacity-0', 'translate-y-2');
+      }, 50);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    // DOUBLE CHEVRON PARSER (Parses headings following '<<')
+    function parseDocument(htmlString) {
+      log("Initializing Double Chevron (<<) Detector...", "info");
+      state.rawHtml = htmlString;
+      
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, 'text/html');
+      
+      // Save Original Doc Styles for rendering nested list bullet points beautifully in Doc View
+      state.docStyles = Array.from(doc.querySelectorAll('style')).map(s => s.outerHTML).join('\n');
+      
+      // 1. Flatten the document into top-level blocks to ignore messy nested divs
+      const allBlocks = Array.from(doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, ul, ol, table, hr'));
+      const blocks = allBlocks.filter(el => !el.parentElement.closest('ul, ol, table'));
+
+      state.tasks = [];
+      let inZone = false;
+      let currentTask = null;
+
+      for (let i = 0; i < blocks.length; i++) {
+        const curr = blocks[i];
+        const text = (curr.textContent || '').trim();
+        const upperText = text.toUpperCase();
+
+        if (upperText.includes("END OF AI CANVAS DOC")) {
+           log("Hit END OF AI CANVAS DOC boundary.", "success");
+           break;
+        }
+
+        if (!inZone) {
+          if (upperText.includes("AI CANVAS TOC")) {
+             inZone = true;
+             log("Hit AI CANVAS TOC boundary. Starting extraction.", "success");
+          }
+          continue;
+        }
+
+        // Look for the "<<" marker in the text element
+        const dchevIndex = text.indexOf('<<');
+
+        if (dchevIndex !== -1) {
+            // Extract everything after the "<<" as the title
+            const title = text.substring(dchevIndex + 2).trim();
+            if (title && !title.toUpperCase().includes("AI CANVAS TOC")) {
+                createNewTask(title);
+            }
+        } else if (currentTask) {
+            // Push content elements into the active workspace scope
+            if (text || curr.tagName === 'HR' || curr.querySelector('img')) {
+                currentTask.contentElements.push(curr.cloneNode(true));
+            }
+        }
+
+        function createNewTask(title) {
+            let existing = state.tasks.find(t => t.title === title);
+            const generatedId = 'ws-' + Math.random().toString(36).substr(2, 9);
+            if (!existing) {
+                currentTask = { id: generatedId, title: title, contentElements: [] };
+                state.tasks.push(currentTask);
+                log(`Found Workspace: "${title.substring(0, 30)}..."`, "info");
+            } else {
+                currentTask = existing;
+            }
+        }
+      }
+
+      state.tasks.forEach(t => {
+          t.contentHtml = t.contentElements.map(el => el.outerHTML).join('\n');
+          t.contentText = t.contentElements.map(el => el.textContent).join('\n');
+      });
+
+      log(`Extraction complete: ${state.tasks.length} total workspaces found.`, "success");
+      updateSidebar();
+      if (state.tasks.length > 0) {
+        selectTask(state.tasks[0].id);
+      } else {
+        clearActiveWorkspace();
+      }
+    }
+
+    function updateSidebar() {
+      const listContainer = document.getElementById('task-list');
+      const countBadge = document.getElementById('badge-task-count');
+      if (!listContainer) return;
+
+      listContainer.innerHTML = '';
+      
+      const searchVal = document.getElementById('task-search').value.toLowerCase();
+      const filtered = state.tasks.filter(task => task.title.toLowerCase().includes(searchVal));
+
+      countBadge.textContent = filtered.length;
+
+      if (filtered.length === 0) {
+        listContainer.innerHTML = `
+          <div class="text-center py-8 text-slate-400 dark:text-zinc-500">
+            <i class="fa-solid fa-folder-open text-xl mb-1.5 opacity-50"></i>
+            <p class="text-[11px]">No active workspace items match</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(task => {
+        const isActive = state.selectedTaskId === task.id;
+        
+        const button = document.createElement('button');
+        button.className = `w-full text-left p-3.5 rounded-lg border transition-all duration-150 flex flex-col gap-1 focus:outline-none ${
+          isActive 
+            ? 'bg-indigo-600 border-indigo-700 text-white shadow-sm' 
+            : 'bg-slate-50 dark:bg-zinc-800/40 hover:bg-slate-100 dark:hover:bg-zinc-800 border-slate-100 dark:border-zinc-800/60 text-slate-700 dark:text-zinc-300'
+        }`;
+        
+        button.innerHTML = `
+          <h4 class="font-semibold text-xs line-clamp-2 leading-snug ${isActive ? 'text-white' : 'text-slate-800 dark:text-white'}">
+            ${task.title}
+          </h4>
+        `;
+
+        button.addEventListener('click', () => {
+          selectTask(task.id);
+        });
+
+        listContainer.appendChild(button);
+      });
+    }
+
+    function selectTask(taskId) {
+      state.selectedTaskId = taskId;
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      updateSidebar();
+
+      document.getElementById('workspace-empty-state').classList.add('hidden');
+      document.getElementById('workspace-active-view').classList.remove('hidden');
+
+      renderContentBlock(task);
+    }
+
+    function renderContentBlock(task) {
+      const container = document.getElementById('dynamic-layout-container');
+      if (!container) return;
+
+      if (state.stylingPreference === 'doc') {
+        // "Doc View": Combines bolded title and original content elements with original stylesheet styles for hierarchies
+        container.innerHTML = `
+          <div class="bg-white dark:bg-zinc-900 rounded-xl p-8 md:p-12 border border-slate-200 dark:border-zinc-800 shadow-md min-h-[500px] transition-all">
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-6 border-b border-slate-100 dark:border-zinc-800 pb-4 flex items-center gap-2">
+              <span class="text-indigo-600 dark:text-indigo-400 font-mono text-xl font-bold">&lt;&lt;</span> ${task.title}
+            </h1>
+            <div class="doc-content mt-6">
+              ${state.docStyles}
+              ${task.contentHtml}
+            </div>
+          </div>
+        `;
+      } else {
+        // "App View": Separated title box and sanitized description box for dashboard views
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = task.contentHtml;
+
+        const styledElements = tempDiv.querySelectorAll('*');
+        styledElements.forEach(el => {
+          el.removeAttribute('style');
+          el.removeAttribute('class');
+          
+          if (el.tagName === 'P') el.className = "text-slate-600 dark:text-zinc-300 text-xs md:text-sm mb-3.5 leading-relaxed";
+          if (el.tagName === 'UL') el.className = "list-disc pl-5 mb-4 text-xs md:text-sm text-slate-600 dark:text-zinc-300 space-y-2";
+          if (el.tagName === 'OL') el.className = "list-decimal pl-5 mb-4 text-xs md:text-sm text-slate-600 dark:text-zinc-300 space-y-2";
+          if (el.tagName === 'LI') el.className = "pl-1";
+        });
+
+        const processedHtml = tempDiv.innerHTML || `<p class="text-slate-400 italic">No text content inside this block.</p>`;
+
+        container.innerHTML = `
+          <div class="space-y-4 transition-all">
+            <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-slate-200 dark:border-zinc-800 shadow-xs">
+              <span class="text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">Selected Workspace</span>
+              <h3 class="text-base font-bold text-slate-900 dark:text-white mt-1">${task.title}</h3>
+            </div>
+            <div class="bg-white dark:bg-zinc-900 rounded-xl p-6 md:p-8 border border-slate-200 dark:border-zinc-800 shadow-xs">
+              <div class="doc-content">
+                ${processedHtml}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function clearActiveWorkspace() {
+      document.getElementById('workspace-empty-state').classList.remove('hidden');
+      document.getElementById('workspace-active-view').classList.add('hidden');
+      document.getElementById('dynamic-layout-container').innerHTML = '';
+    }
+
+    async function fetchGoogleDoc(url) {
+      if (!url) {
+        showToast("Enter a valid published Google Doc URL", "error");
+        return;
+      }
+
+      const fetchIcon = document.getElementById('fetch-icon');
+      const fetchBtn = document.getElementById('btn-fetch');
+      const statusDot = document.getElementById('status-dot');
+      const statusText = document.getElementById('status-text');
+
+      fetchIcon.className = "fa-solid fa-spinner fa-spin text-xs";
+      fetchBtn.disabled = true;
+      statusDot.className = "inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse";
+      statusText.textContent = "Connecting...";
+
+      const proxies = [
+        (target) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`,
+        (target) => `https://corsproxy.io/?url=${encodeURIComponent(target)}`,
+        (target) => `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`
+      ];
+
+      let fetchedHtml = '';
+      let success = false;
+
+      // Pipeline 1: Direct fetch request
+      try {
+        log("Trying direct pipeline fetch...", "info");
+        const res = await fetch(url);
+        if (res.ok) {
+          fetchedHtml = await res.text();
+          success = true;
+          log("Fetched successfully directly!", "success");
+        }
+      } catch (e) {
+        log("Direct fetch restricted by security rules. Swapping to Proxy Pipeline...", "warn");
+      }
+
+      // Pipeline 2: Try CORS Proxies in sequence
+      for (let i = 0; i < proxies.length; i++) {
+        if (success) break;
+        try {
+          const proxyUrl = proxies[i](url);
+          log(`Fetching via proxy pipeline [${i + 1}/${proxies.length}]`, "info");
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            if (i === 2) { // AllOrigins returns a wrapper JSON object
+              const data = await res.json();
+              fetchedHtml = data.contents;
+            } else {
+              fetchedHtml = await res.text();
+            }
+            if (fetchedHtml && fetchedHtml.trim().length > 0) {
+              success = true;
+              log("Fetch success via Proxy Pipeline!", "success");
+            }
+          }
+        } catch (e) {
+          log(`Proxy pipeline ${i + 1} timed out or failed: ${e.message}`, "warn");
+        }
+      }
+
+      fetchIcon.className = "fa-solid fa-sync text-xs";
+      fetchBtn.disabled = false;
+
+      if (success && fetchedHtml.trim().length > 0) {
+        statusDot.className = "inline-block w-2 h-2 rounded-full bg-indigo-50";
+        statusText.textContent = "Active Doc Connected";
+        showToast("Google Doc fetched & parsed successfully!", "success");
+        
+        document.getElementById('manual-html-input').value = fetchedHtml;
+        parseDocument(fetchedHtml);
+      } else {
+        statusDot.className = "inline-block w-2 h-2 rounded-full bg-rose-500 animate-none";
+        statusText.textContent = "CORS Blocked";
+        showToast("CORS blocked request. Please paste source manually.", "warn");
+        
+        document.getElementById('manual-modal').classList.remove('hidden');
+        log("❌ Auto-fetch restricted. Click the 'Manual Page HTML' tab and paste the HTML content directly.", "error");
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (state.darkMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+
+      document.getElementById('task-search').addEventListener('input', () => {
+        updateSidebar();
+      });
+
+      document.getElementById('style-toggle').addEventListener('click', () => {
+        if (state.stylingPreference === 'doc') {
+          state.stylingPreference = 'app';
+          document.getElementById('toggle-text').textContent = "Layout: App View";
+          showToast("Switched to App Layout", "info");
+        } else {
+          state.stylingPreference = 'doc';
+          document.getElementById('toggle-text').textContent = "Layout: Doc View";
+          showToast("Switched to Doc Layout (Preserving Bullet Hierarchies)", "info");
+        }
+        if (state.selectedTaskId) {
+          selectTask(state.selectedTaskId);
+        }
+      });
+
+      document.getElementById('btn-fetch').addEventListener('click', () => {
+        const urlValue = document.getElementById('doc-url').value;
+        fetchGoogleDoc(urlValue);
+      });
+
+      document.getElementById('btn-prev-workspace').addEventListener('click', () => {
+        if (!state.selectedTaskId || state.tasks.length === 0) return;
+        const currIndex = state.tasks.findIndex(t => t.id === state.selectedTaskId);
+        if (currIndex > 0) {
+          selectTask(state.tasks[currIndex - 1].id);
+        } else {
+          showToast("Currently on the first task", "info");
+        }
+      });
+
+      document.getElementById('btn-next-workspace').addEventListener('click', () => {
+        if (!state.selectedTaskId || state.tasks.length === 0) return;
+        const currIndex = state.tasks.findIndex(t => t.id === state.selectedTaskId);
+        if (currIndex < state.tasks.length - 1) {
+          selectTask(state.tasks[currIndex + 1].id);
+        } else {
+          showToast("Currently on the final task", "info");
+        }
+      });
+
+      const manualModal = document.getElementById('manual-modal');
+      document.getElementById('btn-toggle-manual').addEventListener('click', () => {
+        manualModal.classList.remove('hidden');
+      });
+      document.getElementById('btn-close-manual').addEventListener('click', () => {
+        manualModal.classList.add('hidden');
+      });
+      document.getElementById('btn-close-manual-action').addEventListener('click', () => {
+        manualModal.classList.add('hidden');
+      });
+
+      document.getElementById('btn-parse-manual').addEventListener('click', () => {
+        const value = document.getElementById('manual-html-input').value;
+        if (value.trim().length === 0) {
+          showToast("HTML input field is empty", "error");
+          return;
+        }
+        parseDocument(value);
+        manualModal.classList.add('hidden');
+        showToast("Source code parsed inside bounds successfully!", "success");
+      });
+
+      document.getElementById('btn-toggle-theme').addEventListener('click', () => {
+        state.darkMode = !state.darkMode;
+        if (state.darkMode) {
+          document.documentElement.classList.add('dark');
+          localStorage.setItem('theme', 'dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+          localStorage.setItem('theme', 'light');
+        }
+      });
+
+      document.getElementById('btn-open-source').addEventListener('click', () => {
+        const urlInput = document.getElementById('doc-url').value;
+        if (urlInput) {
+          window.open(urlInput, '_blank');
+        }
+      });
+
+      // Auto-load direct URL immediately on load
+      const defaultUrl = document.getElementById('doc-url').value;
+      fetchGoogleDoc(defaultUrl);
+    });
+  </script>
+</body>
+</html>
