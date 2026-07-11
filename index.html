@@ -100,7 +100,7 @@
         </div>
         <div>
           <h1 class="font-bold text-base tracking-tight text-slate-900 dark:text-white">AI Canvas Hub</h1>
-          <p class="text-[10px] text-slate-500 dark:text-zinc-400 font-medium tracking-wide uppercase">Workspace Segmenter</p>
+          <p class="text-[10px] text-slate-500 dark:text-zinc-400 font-medium tracking-wide uppercase font-mono">Chiclet Locator ( &lt;&lt; )</p>
         </div>
       </div>
       
@@ -201,7 +201,7 @@
               </div>
               <h3 class="text-base font-bold text-slate-800 dark:text-white">Connecting your Google Doc</h3>
               <p class="text-xs text-slate-500 dark:text-zinc-400 mt-1 leading-relaxed max-w-md mx-auto">
-                Scanning the Document specifically for Bookmarks and lists under the <strong class="text-indigo-600 dark:text-indigo-400">AI Canvas TOC</strong> header.
+                Scanning the Document specifically for lists designated with the <code class="bg-slate-100 dark:bg-zinc-800 px-1 py-0.5 rounded text-indigo-600 font-mono font-bold">&lt;&lt;</code> prefix under the <strong class="text-indigo-600 dark:text-indigo-400">AI Canvas TOC</strong> header.
               </p>
             </div>
 
@@ -213,7 +213,7 @@
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
                     <span id="active-task-status-badge" class="bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Pending</span>
-                    <span id="active-task-anchor" class="font-mono text-[9px] text-slate-400 dark:text-zinc-500">Bookmark ID</span>
+                    <span id="active-task-anchor" class="font-mono text-[9px] text-slate-400 dark:text-zinc-500">Workspace Node ID</span>
                   </div>
                   <h3 id="active-task-title" class="text-base font-bold text-slate-900 dark:text-white">Workspace Title Placeholder</h3>
                 </div>
@@ -344,9 +344,9 @@
       }, 3500);
     }
 
-    // NEW LINEAR SIBLING WALKER (Guarantees ALL bookmarks are caught)
+    // NEW DOUBLE CHEVRON PARSER (Parses headings following '<<')
     function parseDocument(htmlString) {
-      log("Initializing Linear Sibling Walker...", "info");
+      log("Initializing Double Chevron (<<) Detector...", "info");
       state.rawHtml = htmlString;
       
       const parser = new DOMParser();
@@ -362,7 +362,6 @@
       state.tasks = [];
       let inZone = false;
       let currentTask = null;
-      let pendingBookmarkId = null;
 
       for (let i = 0; i < blocks.length; i++) {
         const curr = blocks[i];
@@ -382,43 +381,29 @@
           continue;
         }
 
-        // Search for bookmark inside block, on block itself, or immediately preceding block
-        let bm = curr.querySelector('a[name^="kix."], a[id^="kix."], [id^="kix."]') || 
-                 (curr.matches('a[name^="kix."], a[id^="kix."], [id^="kix."]') ? curr : null);
+        // Look for the "<<" marker in the text element
+        const dchevIndex = text.indexOf('<<');
 
-        let foundBmId = bm ? (bm.getAttribute('name') || bm.id) : null;
-
-        if (!foundBmId && curr.previousElementSibling) {
-            const prev = curr.previousElementSibling;
-            if ((prev.tagName === 'A' || prev.tagName === 'SPAN' || prev.tagName === 'DIV') && 
-                (prev.id?.startsWith('kix.') || prev.getAttribute('name')?.startsWith('kix.'))) {
-                foundBmId = prev.id || prev.getAttribute('name');
+        if (dchevIndex !== -1) {
+            // Extract everything after the "<<" as the title
+            const title = text.substring(dchevIndex + 2).trim();
+            if (title && !title.toUpperCase().includes("AI CANVAS TOC")) {
+                createNewTask(title);
             }
-        }
-
-        if (foundBmId) {
-            if (text) {
-                createNewTask(foundBmId, text);
-            } else {
-                pendingBookmarkId = foundBmId;
-                continue; 
-            }
-        } else if (pendingBookmarkId && text) {
-            createNewTask(pendingBookmarkId, text);
-            pendingBookmarkId = null;
         } else if (currentTask) {
+            // Push content elements into the active workspace scope
             if (text || curr.tagName === 'HR' || curr.querySelector('img')) {
                 currentTask.contentElements.push(curr.cloneNode(true));
             }
         }
 
-        function createNewTask(bmId, title) {
-            if (title.toUpperCase().includes("AI CANVAS TOC")) return;
+        function createNewTask(title) {
             let existing = state.tasks.find(t => t.title === title);
+            const generatedId = 'ws-' + Math.random().toString(36).substr(2, 9);
             if (!existing) {
-                currentTask = { id: bmId, bookmarkId: bmId, title: title, contentElements: [] };
+                currentTask = { id: generatedId, bookmarkId: generatedId.toUpperCase(), title: title, contentElements: [] };
                 state.tasks.push(currentTask);
-                log(`Found Workspace: ${title.substring(0, 30)}...`, "info");
+                log(`Found Workspace: "${title.substring(0, 30)}..."`, "info");
             } else {
                 currentTask = existing;
             }
@@ -485,7 +470,7 @@
             </span>
           </div>
           <div class="flex items-center justify-between w-full text-[9px] ${isActive ? 'text-indigo-200' : 'text-slate-400 dark:text-zinc-500'} font-mono">
-            <span>Bookmark ID</span>
+            <span>Workspace ID</span>
             <span class="truncate max-w-[100px]" title="${task.bookmarkId}">${task.bookmarkId}</span>
           </div>
         `;
@@ -573,7 +558,7 @@
       const statusDot = document.getElementById('status-dot');
       const statusText = document.getElementById('status-text');
 
-      fetchIcon.className = "fa-solid fa-spinner fa-spin";
+      fetchIcon.className = "fa-solid fa-spinner fa-spin text-xs";
       fetchBtn.disabled = true;
       statusDot.className = "inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse";
       statusText.textContent = "Connecting...";
@@ -624,11 +609,11 @@
         }
       }
 
-      fetchIcon.className = "fa-solid fa-sync";
+      fetchIcon.className = "fa-solid fa-sync text-xs";
       fetchBtn.disabled = false;
 
       if (success && fetchedHtml.trim().length > 0) {
-        statusDot.className = "inline-block w-2 h-2 rounded-full bg-indigo-500";
+        statusDot.className = "inline-block w-2 h-2 rounded-full bg-indigo-50";
         statusText.textContent = "Active Doc Connected";
         showToast("Google Doc fetched & parsed successfully!", "success");
         
