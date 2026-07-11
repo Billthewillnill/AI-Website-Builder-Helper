@@ -455,22 +455,106 @@
           </div>
         `;
       } else {
-        // "App View": Separated title box and sanitized description box for dashboard views
+        // "App View": Parses list items, separating blocks strictly when they strictly match "notes" or "V" + number (e.g., V1, V2.1)
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = task.contentHtml;
 
-        const styledElements = tempDiv.querySelectorAll('*');
-        styledElements.forEach(el => {
-          el.removeAttribute('style');
-          el.removeAttribute('class');
-          
-          if (el.tagName === 'P') el.className = "text-slate-600 dark:text-zinc-300 text-xs md:text-sm mb-3.5 leading-relaxed";
-          if (el.tagName === 'UL') el.className = "list-disc pl-5 mb-4 text-xs md:text-sm text-slate-600 dark:text-zinc-300 space-y-2";
-          if (el.tagName === 'OL') el.className = "list-decimal pl-5 mb-4 text-xs md:text-sm text-slate-600 dark:text-zinc-300 space-y-2";
-          if (el.tagName === 'LI') el.className = "pl-1";
+        const subSections = [];
+        let currentSub = { title: '', elements: [] };
+
+        // Process all child nodes to detect subdivision triggers
+        const children = Array.from(tempDiv.childNodes);
+        children.forEach(node => {
+          if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+          if (node.tagName === 'UL' || node.tagName === 'OL') {
+            const lis = Array.from(node.querySelectorAll('li'));
+            lis.forEach(li => {
+              const text = li.textContent.trim();
+              const isNotes = /^notes[\s:\-]*$/i.test(text);
+              const isVersion = /^v\d+(\.\d+)*[\s:\-]*$/i.test(text);
+
+              if (isNotes || isVersion) {
+                if (currentSub.title || currentSub.elements.length > 0) {
+                  subSections.push(currentSub);
+                }
+                currentSub = { title: text, elements: [] };
+              } else {
+                currentSub.elements.push(li.cloneNode(true));
+              }
+            });
+          } else {
+            const text = node.textContent.trim();
+            const isNotes = /^notes[\s:\-]*$/i.test(text);
+            const isVersion = /^v\d+(\.\d+)*[\s:\-]*$/i.test(text);
+
+            if ((node.tagName === 'P' || /^H[1-6]$/.test(node.tagName)) && (isNotes || isVersion)) {
+              if (currentSub.title || currentSub.elements.length > 0) {
+                subSections.push(currentSub);
+              }
+              currentSub = { title: text, elements: [] };
+            } else {
+              currentSub.elements.push(node.cloneNode(true));
+            }
+          }
         });
 
-        const processedHtml = tempDiv.innerHTML || `<p class="text-slate-400 italic">No text content inside this block.</p>`;
+        if (currentSub.title || currentSub.elements.length > 0) {
+          subSections.push(currentSub);
+        }
+
+        // Render sections dynamically
+        let subSectionsHtml = '';
+        subSections.forEach(sub => {
+          const subTempDiv = document.createElement('div');
+          let inList = false;
+          let listEl = null;
+
+          sub.elements.forEach(el => {
+            el.removeAttribute('style');
+            el.removeAttribute('class');
+
+            if (el.tagName === 'LI') {
+              if (!inList) {
+                inList = true;
+                listEl = document.createElement('ul');
+                listEl.className = "list-disc pl-5 mb-4 text-xs md:text-sm text-slate-600 dark:text-zinc-300 space-y-2";
+                subTempDiv.appendChild(listEl);
+              }
+              el.className = "pl-1";
+              listEl.appendChild(el.cloneNode(true));
+            } else {
+              inList = false;
+              if (el.tagName === 'P') el.className = "text-slate-600 dark:text-zinc-300 text-xs md:text-sm mb-3.5 leading-relaxed";
+              if (el.tagName === 'UL') el.className = "list-disc pl-5 mb-4 text-xs md:text-sm text-slate-600 dark:text-zinc-300 space-y-2";
+              if (el.tagName === 'OL') el.className = "list-decimal pl-5 mb-4 text-xs md:text-sm text-slate-600 dark:text-zinc-300 space-y-2";
+              subTempDiv.appendChild(el);
+            }
+          });
+
+          const contentHtml = subTempDiv.innerHTML || `<p class="text-slate-400 italic">No text content inside this block.</p>`;
+
+          if (sub.title) {
+            subSectionsHtml += `
+              <div class="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-slate-200 dark:border-zinc-800 shadow-xs space-y-3">
+                <h4 class="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2 border-b border-slate-100 dark:border-zinc-800 pb-2 uppercase tracking-wider">
+                  <i class="fa-solid fa-folder-open text-[10px]"></i> ${sub.title}
+                </h4>
+                <div class="doc-content pl-1">
+                  ${contentHtml}
+                </div>
+              </div>
+            `;
+          } else {
+            subSectionsHtml += `
+              <div class="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-slate-200 dark:border-zinc-800 shadow-xs">
+                <div class="doc-content">
+                  ${contentHtml}
+                </div>
+              </div>
+            `;
+          }
+        });
 
         container.innerHTML = `
           <div class="space-y-4 transition-all">
@@ -478,10 +562,8 @@
               <span class="text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">Selected Workspace</span>
               <h3 class="text-base font-bold text-slate-900 dark:text-white mt-1">${task.title}</h3>
             </div>
-            <div class="bg-white dark:bg-zinc-900 rounded-xl p-6 md:p-8 border border-slate-200 dark:border-zinc-800 shadow-xs">
-              <div class="doc-content">
-                ${processedHtml}
-              </div>
+            <div class="space-y-4">
+              ${subSectionsHtml}
             </div>
           </div>
         `;
